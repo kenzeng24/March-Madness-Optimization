@@ -25,7 +25,7 @@ south_bracket = [
     [
         [
             ['Creighton', "North Carolina State"], 
-            ["Baylor", "UCSB"]
+            ["Baylor", 'UC-Santa Barbara']
         ], 
         [
             ['Missouri', 'Utah State',], 
@@ -68,12 +68,24 @@ final = [[south_bracket, east_bracket], [north_bracket, west_bracket]]
 
 example_bracket = [
     [
-        ['Alabama', "Houston"], 
-        ["Maryland", "Purdue"]
-    ], 
+        [
+            ['Alabama', "Houston"], 
+            ["Maryland", "Purdue"]
+        ], 
+        [
+            ['San Diego State', 'Kansas'], 
+            ['Virginia', 'Princeton']
+        ],
+    ],
     [
-        ['San Diego State', 'Kansas'], 
-        ['Virginia', 'Princeton']
+        [
+            ['Creighton', "North Carolina State"], 
+            ["Baylor", 'UC-Santa Barbara']
+        ], 
+        [
+            ['Missouri', 'Utah State'], 
+            ['Arizona', 'Princeton']
+        ]
     ],
 ]
 
@@ -179,6 +191,17 @@ class MarchMadnessEnvironment():
         return team1_reward, team2_reward
     
     
+    def calculate_next_matchup_rewards(self):
+        """get the expected reward for the next matchup"""
+        curr_bracket = self.matchup_list[0]
+        team1_reward, team2_reward = self.calculate_rewards(
+            curr_bracket.team1.winner, 
+            curr_bracket.team2.winner, 
+            curr_bracket.playoff_round
+        )
+        return team1_reward, team2_reward
+        
+    
     def step(self, action):
         """
         pick winner and update bracket
@@ -230,13 +253,57 @@ class MarchMadnessEnvironment():
     def render(self):
         pass 
     
-def main():
-    env = MarchMadnessEnvironment()
+
+def greedy_strategy(march_madness_event, verbose=True):
+    """
+    always pick the action that leads to best immediate reward
+    """
+    total_reward = 0 
     done = False 
     while not done:
-        state, reward, done, info = env.step(action=1)
-        print(info)
+        reward1, reward2 = env.calculate_next_matchup_rewards()
+        action = 1*(reward1 > reward2)
+        state, reward, done, info = env.step(action)
+        if verbose:
+            print(info)
+        total_reward += reward
+    return total_reward
+
+
+def brute_force_strategy(march_madness_event):
+    """
+    iterate through all available sequences of actions 
+    """
+    env = MarchMadnessEnvironment()
+    n = len(env.matchup_list)
+    
+    action_lists = [[]]
+    for i in range(n):
+        new_action_lists = [] 
+        for action_list in action_lists:
+            new_action_lists += [action_list + [1], action_list + [0]] 
+        action_lists = new_action_lists 
+    print(f"there are {n} possible set of actions")
+    
+    best_reward = 0 
+    for action_list in action_lists:
+        env.reset()
+        total_reward = 0 
+        for action in action_list:
+            state, reward, done, info = env.step(action)
+            total_reward += reward
+        if total_reward > best_reward:
+            best_reward = total_reward
+    return best_reward
         
-        
+            
 if __name__ == "__main__":
-    main() 
+    
+    env = MarchMadnessEnvironment()
+    
+    greedy_score = greedy_strategy(env)
+    print(f'greedy reward: {greedy_score}') 
+    
+    optimal_score =  brute_force_strategy(env)
+    print(f'optimal reward: {optimal_score}')
+    
