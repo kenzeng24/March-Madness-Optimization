@@ -1,4 +1,5 @@
-# import gym 
+# import gym
+import pandas as pd 
 
 play_in_south=  ["Texas A&M-Corpus Christi", 'Southeast Missouri State']
 play_in_east = ["Texas Southern", 'Fairleigh Dickinson',]
@@ -95,6 +96,7 @@ class MarchMadnessEnvironment():
             self.matchups = example_bracket
         if self.data is None:
             # defaults to 2023 
+            df_538 = pd.read_csv('data/fivethirtyeight_ncaa_forecasts.csv')
             self.data = df_538[
                 (df_538.forecast_date=='2023-03-12') & 
                 (df_538.gender=='mens')
@@ -126,7 +128,8 @@ class MarchMadnessEnvironment():
         
     def build_bracket(self, matchups):
         """
-        recursively build bracket object
+        recursively build bracket object and
+        generate a list of all matchups 
         """
         if type(matchups) is str:
             # if the bracket only contains one team
@@ -196,9 +199,11 @@ class MarchMadnessEnvironment():
         if action == 1:
             curr_bracket.winner = curr_bracket.team1.winner
             self.state[curr_bracket.team2.winner] = 0
+            reward = team1_reward
         else: 
             curr_bracket.winner = curr_bracket.team2.winner
             self.state[curr_bracket.team1.winner] = 0
+            reward = team2_reward
 
         # update with the next win_probability
         if self.matchup_list:
@@ -213,8 +218,8 @@ class MarchMadnessEnvironment():
             'winner': curr_bracket.winner,
             'round': curr_bracket.playoff_round,
             'matchup': {
-                curr_bracket.team1.winner: team1_reward, 
-                curr_bracket.team2.winner: team2_reward
+                curr_bracket.team1.winner: round(team1_reward,3), 
+                curr_bracket.team2.winner: round(team2_reward,3)
             },
         } 
         return self.state, reward, done, info
