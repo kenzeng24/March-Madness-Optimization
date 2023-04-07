@@ -1,93 +1,32 @@
 # import gym
 import pandas as pd 
 
-play_in_south=  ["Texas A&M-Corpus Christi", 'Southeast Missouri State']
-play_in_east = ["Texas Southern", 'Fairleigh Dickinson',]
-play_in_west = ["Arizona State", "Nevada"]
-play_in_mid_west = ['Mississippi State','Pittsburgh']
 
-play_in_south=  ["Texas A&M-Corpus Christi", 'Southeast Missouri State']
-play_in_east = ["Texas Southern", 'Fairleigh Dickinson',]
-play_in_west = ["Arizona State", "Nevada"]
-play_in_mid_west = ['Mississippi State','Pittsburgh']
-
-south_bracket = [
-    [
-        [
-            ['Alabama', play_in_south], # play_in_south
-            ["Maryland", "West Virginia"]
-        ], 
-        [
-            ['San Diego State', 'College of Charleston'], 
-            ['Virginia', 'Furman']
-        ],
-    ], 
-    [
-        [
-            ['Creighton', "North Carolina State"], 
-            ["Baylor", 'UC-Santa Barbara']
-        ], 
-        [
-            ['Missouri', 'Utah State',], 
-            ['Arizona', 'Princeton']
-        ],
-    ]
-]
-
-east_bracket = [
-    [
-        [
-            ['Purde', play_in_east], 
-            ["Memphis", 'Florida Atlantic']
-        ], 
-        [
-            ['Duke', 'Oral Roberts'], 
-            ['Tennessee', 'Louisiana']
-        ],
-    ], 
-    [
-        [
-            ['Kentucky', "Providence"], 
-            ["Kansas State", "Montana State"]
-        ], 
-        [
-            ['Michigan State', 'Southern California',], 
-            ['Marquette', 'Vermont']
-        ],
-    ]
+def make_teams(data):
+    """
+    create a team dictionary from data 
+    """
+    teams = {}
+    regions = data['team_region'].drop_duplicates()
+    seeds = data['team_seed'].drop_duplicates()
     
-]
+    for region in regions:
+        teams[region] = {}
+        for seed in seeds:
+            if not data.loc[(data['team_region']==region) & (data['team_seed']==seed), :].empty:
+                teams[region][seed] = data.loc[(data['team_region']==region) & (data['team_seed']==seed)].index[0]
+        play_in_keys = [key for key in teams[region].keys() if 'a' in key or 'b' in key]
+        play_in_teams = [teams[region][key] for key in teams[region].keys() if 'a' in key or 'b' in key]
+        play_in_key = play_in_keys[0][:-1]
+        teams[region][play_in_key] = play_in_teams
+            
+    return teams
+    
 
-# TODO: fill in north and west brackets
-north_bracket = []
-west_bracket = [] 
+def example_reward_function(seed, playoff_round):
+    modifier = playoff_round-1 if playoff_round != 7 else 10 
+    return int(seed.replace('a','').replace('b','')) * modifier
 
-final = [[south_bracket, east_bracket], [north_bracket, west_bracket]]
-
-
-
-example_bracket = [
-    [
-        [
-            ['Alabama', "Houston"], 
-            ["Maryland", "Purdue"]
-        ], 
-        [
-            ['San Diego State', 'Kansas'], 
-            ['Virginia', 'Princeton']
-        ],
-    ],
-    [
-        [
-            ['Creighton', "North Carolina State"], 
-            ["Baylor", 'UC-Santa Barbara']
-        ], 
-        [
-            ['Missouri', 'Utah State'], 
-            ['Arizona', 'Princeton']
-        ]
-    ],
-]
 
 class Bracket:
     
@@ -96,16 +35,24 @@ class Bracket:
         self.playoff_round = playoff_round
         self.team1 = team1 
         self.team2 = team2
-
+        
+    def __repr__(self):
+        team1_winner, team2_winner = None, None
+        if self.team1 is not None:
+            team1_winner = self.team1.winner
+        if self.team1 is not None:
+            team2_winner = self.team2.winner
+        return f'([{team1_winner},{team2_winner}], r={self.playoff_round})'
+    
+    def __str__(self):
+        return self.__repr__()
         
 class MarchMadnessEnvironment():
     
-    def __init__(self, data=None, matchups=None):
+    def __init__(self, data=None):
         self.matchup_list = [] 
         self.data = data
-        self.matchups = matchups
-        if self.matchups is None:
-            self.matchups = example_bracket
+        
         if self.data is None:
             # defaults to 2023 
             df_538 = pd.read_csv('data/fivethirtyeight_ncaa_forecasts.csv')
@@ -113,6 +60,8 @@ class MarchMadnessEnvironment():
                 (df_538.forecast_date=='2023-03-12') & 
                 (df_538.gender=='mens')
             ].set_index('team_name')
+            
+        self.teams = make_teams(self.data)
         self.reset()
     
     def reset(self):
@@ -121,8 +70,9 @@ class MarchMadnessEnvironment():
         """
         self.matchup_list = []
         self.state = {}
-        self.bracket = self.build_bracket(self.matchups)
+        self.bracket = self.build_bracket(self.complete_bracket(self.data))
         self.depth = self.bracket.playoff_round
+        self.matchup_in_round = {i:[] for i in range(self.depth+1)}
         self.update_states(self.bracket, self.depth)
     
     
@@ -134,8 +84,45 @@ class MarchMadnessEnvironment():
             if bracket.team1 is None and bracket.team2 is None:
                 self.state[bracket.winner] = self.data.loc[bracket.winner, f'rd{n+1}_win']
             bracket.playoff_round = n
+            self.matchup_in_round[n].append(bracket)
             self.update_states(bracket.team1, n-1)
-            self.update_states(bracket.team1, n-1)
+            self.update_states(bracket.team2, n-1)
+            
+    def make_region(self, region):
+        """
+        build lists of matchups for a particular region 
+        """
+        teams = self.teams
+        bracket = [
+            [
+                [
+                    [teams[region]['1'], teams[region]['16']], 
+                    [teams[region]['8'], teams[region]['9']], 
+                ], 
+                [
+                    [teams[region]['5'], teams[region]['12']], 
+                    [teams[region]['4'], teams[region]['13']], 
+                ],
+            ], 
+            [
+                [
+                    [teams[region]['6'], teams[region]['11']], 
+                    [teams[region]['3'], teams[region]['14']], 
+                ], 
+                [
+                    [teams[region]['7'], teams[region]['10']], 
+                    [teams[region]['2'], teams[region]['15']], 
+                ],
+            ]
+        ]
+        return bracket
+
+
+    def complete_bracket(self, data):
+        return [
+            [self.make_region('South'), self.make_region('East')], 
+            [self.make_region('Midwest'), self.make_region('West')]
+        ]
         
         
     def build_bracket(self, matchups):
@@ -168,7 +155,7 @@ class MarchMadnessEnvironment():
             self.matchup_list.append(bracket)
             return bracket   
     
-    def calculate_rewards(self, team1, team2, playoff_round):
+    def calculate_rewards(self, team1, team2, playoff_round, reward_function=example_reward_function):
         """
         given two teams calculate the expected reward 
         using win probabilities
@@ -179,15 +166,8 @@ class MarchMadnessEnvironment():
         seeding1 = self.data.loc[team1, 'team_seed']
         seeding2 = self.data.loc[team2, 'team_seed']
         
-        # account for playoff teams
-        if seeding1 == '16a':
-            seeding1 = '16'
-        if seeding2 == '16a':
-            seeding2 = '16'
-        seeding1, seeding2 = int(seeding1), int(seeding2)
-        
-        team1_reward = p1 / (p1+p2) * seeding1 * playoff_round
-        team2_reward = p2 / (p1+p2) * seeding2 * playoff_round
+        team1_reward = p1 / (p1+p2) * reward_function(seeding1, playoff_round)
+        team2_reward = p2 / (p1+p2) * reward_function(seeding2, playoff_round)
         return team1_reward, team2_reward
     
     
@@ -300,10 +280,13 @@ def brute_force_strategy(march_madness_event):
 if __name__ == "__main__":
     
     env = MarchMadnessEnvironment()
+    for x in env.matchup_list:
+        print(x)
+    print(env.matchup_in_round)
     
     greedy_score = greedy_strategy(env)
     print(f'greedy reward: {greedy_score}') 
     
-    optimal_score =  brute_force_strategy(env)
-    print(f'optimal reward: {optimal_score}')
+    #optimal_score =  brute_force_strategy(env)
+    # print(f'optimal reward: {optimal_score}')
     
