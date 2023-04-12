@@ -60,7 +60,8 @@ class MarchMadnessEnvironment():
                 (df_538.forecast_date=='2023-03-12') & 
                 (df_538.gender=='mens')
             ].set_index('team_name')
-            
+        
+        self.teams_list = self.data.index.sort_values().to_list()
         self.teams = make_teams(self.data)
         self.reset()
     
@@ -74,8 +75,18 @@ class MarchMadnessEnvironment():
         self.depth = self.bracket.playoff_round
         self.matchup_in_round = {i:[] for i in range(self.depth+1)}
         self.update_states(self.bracket, self.depth)
-    
-    
+        self.state_list = [0 for team in self.teams_list]
+        self.state_list = self.update_state_list()
+
+    def update_state_list(self):
+        for team, prob in self.state.items():
+            idx = self.teams_list.index(team)
+            if prob != 0:
+                self.state_list[idx] = 1
+            else:
+                self.state_list[idx] = 0
+        return self.state_list
+
     def update_states(self, bracket, n):
         """
         update each bracket with their actual depth
@@ -215,15 +226,17 @@ class MarchMadnessEnvironment():
                 f'rd{curr_bracket.playoff_round+1}_win'
             ]
         
+        self.state_list = self.update_state_list()
+        
         done = len(self.matchup_list) == 0
         info = {
-            'matchups_left': len(self.matchup_list),
-            'winner': curr_bracket.winner,
             'round': curr_bracket.playoff_round,
             'matchup': {
                 curr_bracket.team1.winner: round(team1_reward,3), 
                 curr_bracket.team2.winner: round(team2_reward,3)
             },
+            'winner': curr_bracket.winner,
+            'matchups_left': len(self.matchup_list),
         } 
         return self.state, reward, done, info
     
@@ -241,9 +254,9 @@ def greedy_strategy(march_madness_event, verbose=True):
     total_reward = 0 
     done = False 
     while not done:
-        reward1, reward2 = env.calculate_next_matchup_rewards()
+        reward1, reward2 = march_madness_event.calculate_next_matchup_rewards()
         action = 1*(reward1 > reward2)
-        state, reward, done, info = env.step(action)
+        state, reward, done, info = march_madness_event.step(action)
         if verbose:
             print(info)
         total_reward += reward
