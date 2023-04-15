@@ -78,6 +78,8 @@ class MarchMadnessEnvironment():
         self.state_list = [0 for team in self.teams_list]
         self.state_list = self.update_state_list()
 
+        return self.state, {}
+
     def update_state_list(self):
         for team, prob in self.state.items():
             idx = self.teams_list.index(team)
