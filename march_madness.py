@@ -7,20 +7,22 @@ def make_teams(data):
     create a team dictionary from data 
     """
     teams = {}
-    regions = data['team_region'].drop_duplicates()
-    seeds = data['team_seed'].drop_duplicates()
+    teams_map = {}
+    regions = data.index.get_level_values('team_region').drop_duplicates()
+    seeds = data.index.get_level_values('team_seed').drop_duplicates()
     
     for region in regions:
         teams[region] = {}
         for seed in seeds:
-            if not data.loc[(data['team_region']==region) & (data['team_seed']==seed), :].empty:
-                teams[region][seed] = data.loc[(data['team_region']==region) & (data['team_seed']==seed)].index[0]
+            if (region, seed) in data.index and not data.loc[(region, seed), :].empty:
+                teams[region][seed] = data.loc[(region, seed)].index[0]
+                teams_map[(region, seed)] = teams[region][seed]
         play_in_keys = [key for key in teams[region].keys() if 'a' in key or 'b' in key]
         play_in_teams = [teams[region][key] for key in teams[region].keys() if 'a' in key or 'b' in key]
         play_in_key = play_in_keys[0][:-1]
         teams[region][play_in_key] = play_in_teams
             
-    return teams
+    return teams, teams_map
     
 
 def example_reward_function(seed, playoff_round):
@@ -59,10 +61,10 @@ class MarchMadnessEnvironment():
             self.data = df_538[
                 (df_538.forecast_date=='2023-03-12') & 
                 (df_538.gender=='mens')
-            ].set_index('team_name')
+            ].set_index(['team_region', 'team_seed'])
         
-        self.teams_list = self.data.index.sort_values().to_list()
-        self.teams = make_teams(self.data)
+        self.teams, self.teams_map = make_teams(self.data)
+        self.teams_list = list(self.teams_map.keys())
         self.reset()
     
     def reset(self):
@@ -77,7 +79,6 @@ class MarchMadnessEnvironment():
         self.update_states(self.bracket, self.depth)
         self.state_list = [0 for team in self.teams_list]
         self.state_list = self.update_state_list()
-
         return self.state, {}
 
     def update_state_list(self):
@@ -89,53 +90,48 @@ class MarchMadnessEnvironment():
                 self.state_list[idx] = 0
         return self.state_list
 
-    def update_states(self, bracket, n):
-        """
-        update each bracket with their actual depth
-        """
-        if bracket is not None:
-            if bracket.team1 is None and bracket.team2 is None:
-                self.state[bracket.winner] = self.data.loc[bracket.winner, f'rd{n+1}_win']
-            bracket.playoff_round = n
-            self.matchup_in_round[n].append(bracket)
-            self.update_states(bracket.team1, n-1)
-            self.update_states(bracket.team2, n-1)
-            
-    def make_region(self, region):
-        """
-        build lists of matchups for a particular region 
-        """
-        teams = self.teams
-        bracket = [
-            [
-                [
-                    [teams[region]['1'], teams[region]['16']], 
-                    [teams[region]['8'], teams[region]['9']], 
-                ], 
-                [
-                    [teams[region]['5'], teams[region]['12']], 
-                    [teams[region]['4'], teams[region]['13']], 
-                ],
-            ], 
-            [
-                [
-                    [teams[region]['6'], teams[region]['11']], 
-                    [teams[region]['3'], teams[region]['14']], 
-                ], 
-                [
-                    [teams[region]['7'], teams[region]['10']], 
-                    [teams[region]['2'], teams[region]['15']], 
-                ],
-            ]
-        ]
-        return bracket
-
-
     def complete_bracket(self, data):
         return [
             [self.make_region('South'), self.make_region('East')], 
             [self.make_region('Midwest'), self.make_region('West')]
         ]
+            
+
+    def make_region(self, region):
+        """
+        build lists of matchups for a particular region 
+        """
+        teams = [team for team in self.teams_list if team[0] == region]
+        seeds = [team[1] for team in teams]
+        index = {}
+        for i in range(1, 17):
+            if str(i) in seeds:
+                index[i] = (region, str(i))
+            else:
+                index[i] = [(region, seed) for seed in seeds if str(i) in seed]
+        bracket = [
+            [
+                [
+                    [index[1], index[16]], 
+                    [index[8], index[9]], 
+                ], 
+                [
+                    [index[5], index[12]], 
+                    [index[4], index[13]], 
+                ],
+            ], 
+            [
+                [
+                    [index[6], index[11]], 
+                    [index[3], index[14]], 
+                ], 
+                [
+                    [index[7], index[10]], 
+                    [index[2], index[15]], 
+                ],
+            ]
+        ]
+        return bracket
         
         
     def build_bracket(self, matchups):
@@ -143,7 +139,7 @@ class MarchMadnessEnvironment():
         recursively build bracket object and
         generate a list of all matchups 
         """
-        if type(matchups) is str:
+        if type(matchups) is tuple:
             # if the bracket only contains one team
             # we have winner by default 
             team = matchups
@@ -167,6 +163,30 @@ class MarchMadnessEnvironment():
             )
             self.matchup_list.append(bracket)
             return bracket   
+        
+
+    def update_states(self, bracket, n):
+        """
+        update each bracket with their actual depth
+        """
+        if bracket is not None:
+            if bracket.team1 is None and bracket.team2 is None:
+                self.state[bracket.winner] = self.data.loc[bracket.winner, f'rd{n+1}_win']
+            bracket.playoff_round = n
+            self.matchup_in_round[n].append(bracket)
+            self.update_states(bracket.team1, n-1)
+            self.update_states(bracket.team2, n-1)
+
+
+    def update_state_list(self):
+        for team, prob in self.state.items():
+            idx = self.teams_list.index(team)
+            if prob != 0:
+                self.state_list[idx] = 1
+            else:
+                self.state_list[idx] = 0
+        return self.state_list
+    
     
     def calculate_rewards(self, team1, team2, playoff_round, reward_function=example_reward_function):
         """
@@ -176,8 +196,8 @@ class MarchMadnessEnvironment():
         p1 = self.data.loc[team1, f'rd{playoff_round}_win']
         p2 = self.data.loc[team2, f'rd{playoff_round}_win']
         
-        seeding1 = self.data.loc[team1, 'team_seed']
-        seeding2 = self.data.loc[team2, 'team_seed']
+        seeding1 = team1[1]
+        seeding2 = team2[1]
         
         team1_reward = p1 / (p1+p2) * reward_function(seeding1, playoff_round)
         team2_reward = p2 / (p1+p2) * reward_function(seeding2, playoff_round)
@@ -240,7 +260,7 @@ class MarchMadnessEnvironment():
             'winner': curr_bracket.winner,
             'matchups_left': len(self.matchup_list),
         } 
-        return self.state, reward, done, info
+        return self.state_list, reward, done, info
     
     def close(self):
         pass 
