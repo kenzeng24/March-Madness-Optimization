@@ -79,7 +79,16 @@ class MarchMadnessEnvironment():
         self.update_states(self.bracket, self.depth)
         self.state_list = [0 for team in self.teams_list]
         self.state_list = self.update_state_list()
+        return self.state, {}
 
+    def update_state_list(self):
+        for team, prob in self.state.items():
+            idx = self.teams_list.index(team)
+            if prob != 0:
+                self.state_list[idx] = 1
+            else:
+                self.state_list[idx] = 0
+        return self.state_list
 
     def complete_bracket(self, data):
         return [

@@ -2,6 +2,7 @@ from collections import deque
 import random
 
 import numpy as np
+import tensorflow as tf 
 from tensorflow.keras.models import Sequential  # To compose multiple Layers
 from tensorflow.keras.layers import Dense       # Fully-Connected layer
 from tensorflow.keras.layers import Activation  # Activation functions
@@ -10,49 +11,43 @@ from tensorflow.keras.models import clone_model
 
 from march_madness import MarchMadnessEnvironment
 
+GAMMA = 0.95
+
 def train_model(
     EPOCHS = 300,
     epsilon = 1.0,
     EPSILON_REDUCE = 0.995,
     LEARNING_RATE = 0.001, 
-    GAMMA = 0.95,
 ):
     env = MarchMadnessEnvironment()
-
     n_actions = 2
     n_teams = len(env.teams_list)
 
     model = Sequential()
-
     model.add(Dense(16, input_shape=(1, n_teams)))
     model.add(Activation('relu'))
-
     model.add(Dense(32))
     model.add(Activation('relu'))
-
-
     model.add(Dense(n_actions))
     model.add(Activation('linear'))
-
     print(model.summary())
     
     target_model = clone_model(model)
-
     replay_buffer = deque(maxlen=20000)
     update_target_model = 10
 
     model.compile(loss='mse', optimizer=Adam(learning_rate=LEARNING_RATE))
 
     best_so_far = 0
-
     for epoch in range(EPOCHS):
         
         observation, info = env.reset()  # Get inital state
+        observation =  tf.reshape(
+            tf.constant(list(observation.values())), (1,-1)
+        )
         
         # Keras expects the input to be of shape [1, X] thus we have to reshape
         # [Jeremy] Original state is an array of shape (4): [Cart Position, Cart Velocity, Pole Angle, Pole Angular Velocity]
-        observation = observation.reshape([1, 4])  
-        #print(f"*** Debug, observation shape: {observation.shape}")
         done = False  
         
         points = 0
@@ -62,8 +57,10 @@ def train_model(
             action = epsilon_greedy_action_selection(model, epsilon, observation)
             
             # Perform action and get next state
-            next_observation, reward, done, truncated, info = env.step(action)
-            next_observation = next_observation.reshape([1, 4])  # Reshape!
+            next_observation, reward, done, info = env.step(action)
+            next_observation =  tf.reshape(
+                tf.constant(list(next_observation.values())), (1,-1)
+            )
             
             replay_buffer.append((observation, action, reward, next_observation, done))  # Update the replay buffer
             
@@ -91,13 +88,13 @@ def epsilon_greedy_action_selection(model, epsilon, observation):
     obs=[]
     if np.random.random() > epsilon:
         #print(f"*** Taking Greedy Action, observation shape 1: {observation.shape}")
-        observation = observation.reshape([1, 1, 4]) 
+        observation = tf.reshape(observation, [1, 1, -1]) 
         #print(f"*** Taking Greedy Action, observation shape 2: {observation.shape}")
         prediction = model.predict(observation)  # Perform the prediction on the observation
         action = np.argmax(prediction)           # Chose the action with the highest value
     else:
         #print(f"*** Taking a random action")
-        action = np.random.randint(0, env.action_space.n)  # Select random action with probability epsilon
+        action = np.random.randint(0, 2)  # Select random action with probability epsilon
     return action
 
 def update_model(replay_buffer, batch_size, model, target_model, gamma):
@@ -184,22 +181,27 @@ def update_model_handler(epoch, update_target_model, model, target_model):
         target_model.set_weights(model.get_weights())
         #print(f"*** Debug: Updating model")
 
+
 def exploit_model(model):
-    env = MarchMadnessEnvironment()
-
-    env.reset()
-
-    for counter in range(50):
+    env = march_madness.MarchMadnessEnvironment()
+    observation, info = env.reset()
+    total_reward = 0 
+    done = False
+    while not done:
         # Choose action from predicted Q-values
-        action = np.argmax(model.predict(env.state_list)) 
+        observations =  tf.reshape(
+            tf.constant(list(observation.values())),
+            (1,1,-1)
+        )
+        action = np.argmax(model.predict(observations)) 
         
         # Perform the action 
-        state, reward, done, info = env.step(action)
-        
+        observation, reward, done, info = env.step(action)
+        total_reward  += reward
         # clear_output(wait=True)
         
         if done:
-            print(f"Test episode done")
+            print(f"Total Reward: {total_reward}")
             env.reset()
             #break
             
