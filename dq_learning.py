@@ -190,7 +190,7 @@ def exploit_model(model):
     while not done:
         # Choose action from predicted Q-values
         observations =  tf.reshape(
-            tf.constant(list(observation.values())),
+            tf.constant(observation),
             (1,1,-1)
         )
         action = np.argmax(model.predict(observations)) 
