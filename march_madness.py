@@ -79,7 +79,7 @@ class MarchMadnessEnvironment():
         self.update_states(self.bracket, self.depth)
         self.state_list = [0 for team in self.teams_list]
         self.state_list = self.update_state_list()
-        return self.state, {}
+        return self.state_list, {}
 
     def update_state_list(self):
         for team, prob in self.state.items():
@@ -190,28 +190,30 @@ class MarchMadnessEnvironment():
     
     def calculate_rewards(self, team1, team2, playoff_round, reward_function=example_reward_function):
         """
-        given two teams calculate the expected reward 
-        using win probabilities
-        """
-        p1 = self.data.loc[team1, f'rd{playoff_round}_win']
-        p2 = self.data.loc[team2, f'rd{playoff_round}_win']
-        
+        calculate reward of the two teams given a reward function
+        """        
         seeding1 = team1[1]
         seeding2 = team2[1]
         
-        team1_reward = p1 / (p1+p2) * reward_function(seeding1, playoff_round)
-        team2_reward = p2 / (p1+p2) * reward_function(seeding2, playoff_round)
+        team1_reward = reward_function(seeding1, playoff_round)
+        team2_reward = reward_function(seeding2, playoff_round)
         return team1_reward, team2_reward
     
     
-    def calculate_next_matchup_rewards(self):
+    def calculate_expected_rewards(self, team1, team2, playoff_round):
         """get the expected reward for the next matchup"""
-        curr_bracket = self.matchup_list[0]
         team1_reward, team2_reward = self.calculate_rewards(
-            curr_bracket.team1.winner, 
-            curr_bracket.team2.winner, 
-            curr_bracket.playoff_round
+            team1, 
+            team2, 
+            playoff_round
         )
+
+        p1 = self.data.loc[team1, f'rd{playoff_round}_win']
+        p2 = self.data.loc[team2, f'rd{playoff_round}_win']
+
+        team1_reward = p1 * team1_reward
+        team2_reward = p2 * team2_reward
+
         return team1_reward, team2_reward
         
     
@@ -225,8 +227,15 @@ class MarchMadnessEnvironment():
         # get next available matchup 
         curr_bracket = self.matchup_list.pop(0)
         
-        # calculate expected rewards given win probabilities
+        # calculate reward for each team
         team1_reward, team2_reward = self.calculate_rewards(
+            curr_bracket.team1.winner, 
+            curr_bracket.team2.winner, 
+            curr_bracket.playoff_round
+        )
+        
+        # calculate expected reward for each team
+        team1_reward_exp, team2_reward_exp = self.calculate_expected_rewards(
             curr_bracket.team1.winner, 
             curr_bracket.team2.winner, 
             curr_bracket.playoff_round
@@ -235,11 +244,11 @@ class MarchMadnessEnvironment():
         if action == 1:
             curr_bracket.winner = curr_bracket.team1.winner
             self.state[curr_bracket.team2.winner] = 0
-            reward = team1_reward
+            reward = team1_reward_exp
         else: 
             curr_bracket.winner = curr_bracket.team2.winner
             self.state[curr_bracket.team1.winner] = 0
-            reward = team2_reward
+            reward = team2_reward_exp
 
         # update with the next win_probability
         if self.matchup_list:
@@ -254,8 +263,8 @@ class MarchMadnessEnvironment():
         info = {
             'round': curr_bracket.playoff_round,
             'matchup': {
-                curr_bracket.team1.winner: round(team1_reward,3), 
-                curr_bracket.team2.winner: round(team2_reward,3)
+                curr_bracket.team1.winner: round(team1_reward_exp,3), 
+                curr_bracket.team2.winner: round(team2_reward_exp,3)
             },
             'winner': curr_bracket.winner,
             'matchups_left': len(self.matchup_list),
@@ -276,7 +285,14 @@ def greedy_strategy(march_madness_event, verbose=True):
     total_reward = 0 
     done = False 
     while not done:
-        reward1, reward2 = march_madness_event.calculate_next_matchup_rewards()
+        curr_bracket = march_madness_event.matchup_list[0]
+
+        team1 = curr_bracket.team1.winner
+        team2 = curr_bracket.team2.winner
+
+        playoff_round = curr_bracket.playoff_round
+
+        reward1, reward2 = march_madness_event.calculate_expected_rewards(team1, team2, playoff_round)
         action = 1*(reward1 > reward2)
         state, reward, done, info = march_madness_event.step(action)
         if verbose:

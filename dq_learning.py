@@ -43,7 +43,7 @@ def train_model(
         
         observation, info = env.reset()  # Get inital state
         observation =  tf.reshape(
-            tf.constant(list(observation.values())), (1,-1)
+            tf.constant(observation), (1,-1)
         )
         
         # Keras expects the input to be of shape [1, X] thus we have to reshape
@@ -59,7 +59,7 @@ def train_model(
             # Perform action and get next state
             next_observation, reward, done, info = env.step(action)
             next_observation =  tf.reshape(
-                tf.constant(list(next_observation.values())), (1,-1)
+                tf.constant(next_observation), (1,-1)
             )
             
             replay_buffer.append((observation, action, reward, next_observation, done))  # Update the replay buffer
@@ -183,14 +183,14 @@ def update_model_handler(epoch, update_target_model, model, target_model):
 
 
 def exploit_model(model):
-    env = march_madness.MarchMadnessEnvironment()
+    env = MarchMadnessEnvironment()
     observation, info = env.reset()
     total_reward = 0 
     done = False
     while not done:
         # Choose action from predicted Q-values
         observations =  tf.reshape(
-            tf.constant(list(observation.values())),
+            tf.constant(observation),
             (1,1,-1)
         )
         action = np.argmax(model.predict(observations)) 
