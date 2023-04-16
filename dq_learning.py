@@ -183,7 +183,7 @@ def update_model_handler(epoch, update_target_model, model, target_model):
 
 
 def exploit_model(model):
-    env = march_madness.MarchMadnessEnvironment()
+    env = MarchMadnessEnvironment()
     observation, info = env.reset()
     total_reward = 0 
     done = False
