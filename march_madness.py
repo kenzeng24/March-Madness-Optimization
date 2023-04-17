@@ -49,6 +49,7 @@ class Bracket:
     def __str__(self):
         return self.__repr__()
         
+        
 class MarchMadnessEnvironment():
     
     def __init__(self, data=None):
@@ -71,6 +72,7 @@ class MarchMadnessEnvironment():
         """
         regenerate brackets and refresh all winners
         """
+        self.bracket_probability = 1
         self.matchup_list = []
         self.state = {}
         self.bracket = self.build_bracket(self.complete_bracket(self.data))
@@ -81,6 +83,7 @@ class MarchMadnessEnvironment():
         self.state_list = self.update_state_list()
         return self.state_list, {}
 
+    
     def update_state_list(self):
         for team, prob in self.state.items():
             idx = self.teams_list.index(team)
@@ -200,21 +203,11 @@ class MarchMadnessEnvironment():
         return team1_reward, team2_reward
     
     
-    def calculate_expected_rewards(self, team1, team2, playoff_round):
+    def calculate_win_probability(self, team1, team2, playoff_round):
         """get the expected reward for the next matchup"""
-        team1_reward, team2_reward = self.calculate_rewards(
-            team1, 
-            team2, 
-            playoff_round
-        )
-
         p1 = self.data.loc[team1, f'rd{playoff_round}_win']
         p2 = self.data.loc[team2, f'rd{playoff_round}_win']
-
-        team1_reward = p1 * team1_reward
-        team2_reward = p2 * team2_reward
-
-        return team1_reward, team2_reward
+        return p1, p2
         
     
     def step(self, action):
@@ -235,11 +228,15 @@ class MarchMadnessEnvironment():
         )
         
         # calculate expected reward for each team
-        team1_reward_exp, team2_reward_exp = self.calculate_expected_rewards(
+        p1,p2 = self.calculate_win_probability(
             curr_bracket.team1.winner, 
             curr_bracket.team2.winner, 
             curr_bracket.playoff_round
         )
+        
+        team1_reward_exp = p1 * team1_reward
+        team2_reward_exp = p2 * team2_reward
+        
         # update the winner of bracket and state base on action 
         if action == 1:
             curr_bracket.winner = curr_bracket.team1.winner
@@ -315,6 +312,8 @@ def brute_force_strategy(march_madness_event):
             new_action_lists += [action_list + [1], action_list + [0]] 
         action_lists = new_action_lists 
     print(f"there are {n} possible set of actions")
+    assert n < 100000, 'there are too many combinations to compute
+        
     
     best_reward = 0 
     for action_list in action_lists:
