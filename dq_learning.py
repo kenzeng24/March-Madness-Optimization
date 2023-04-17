@@ -66,7 +66,7 @@ def train_model(
             
             observation = next_observation  # Update the observation
             
-            points += 1
+            points += reward
 
             # Train the model by replaying
             #print(f"*** Debug: Done = {done}")
