@@ -13,24 +13,30 @@ from march_madness import MarchMadnessEnvironment
 
 GAMMA = 0.95
 
+def build_model(n_teams=68, n_actions=2):
+    model = Sequential()
+    model.add(Dense(256, input_shape=(1, n_teams)))
+    model.add(Activation('relu'))
+    model.add(Dense(128))
+    model.add(Activation('relu'))
+    model.add(Dense(n_actions))
+    model.add(Activation('linear'))
+    print(model.summary())  
+   
+    return model
+
 def train_model(
     EPOCHS = 300,
     epsilon = 1.0,
     EPSILON_REDUCE = 0.995,
     LEARNING_RATE = 0.001, 
+    model=None
 ):
     env = MarchMadnessEnvironment()
     n_actions = 2
     n_teams = len(env.teams_list)
-
-    model = Sequential()
-    model.add(Dense(16, input_shape=(1, n_teams)))
-    model.add(Activation('relu'))
-    model.add(Dense(32))
-    model.add(Activation('relu'))
-    model.add(Dense(n_actions))
-    model.add(Activation('linear'))
-    print(model.summary())
+    if model is None:
+        model = build_model(n_teams=n_teams, n_actions=n_actions)
     
     target_model = clone_model(model)
     replay_buffer = deque(maxlen=20000)
@@ -187,6 +193,7 @@ def exploit_model(model):
     observation, info = env.reset()
     total_reward = 0 
     done = False
+    history = [] 
     while not done:
         # Choose action from predicted Q-values
         observations =  tf.reshape(
@@ -197,12 +204,13 @@ def exploit_model(model):
         
         # Perform the action 
         observation, reward, done, info = env.step(action)
-        total_reward  += reward
+        history.append(reward)
         # clear_output(wait=True)
-        
         if done:
+            total_reward = reward
             print(f"Total Reward: {total_reward}")
             env.reset()
-            #break
             
     env.close()
+    return history
+

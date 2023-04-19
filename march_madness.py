@@ -81,6 +81,8 @@ class MarchMadnessEnvironment():
         self.update_states(self.bracket, self.depth)
         self.state_list = [0 for team in self.teams_list]
         self.state_list = self.update_state_list()
+        self.discount = 1 
+        self.total_reward = 0 
         return self.state_list, {}
 
     
@@ -205,10 +207,27 @@ class MarchMadnessEnvironment():
     
     def calculate_win_probability(self, team1, team2, playoff_round):
         """get the expected reward for the next matchup"""
-        p1 = self.data.loc[team1, f'rd{playoff_round}_win']
-        p2 = self.data.loc[team2, f'rd{playoff_round}_win']
-        return p1, p2
-        
+        pp1,pp2 = 1,1
+        if playoff_round > 1:
+            pp1 = self.data.loc[team1, f'rd{playoff_round-1}_win']
+            pp2 = self.data.loc[team2, f'rd{playoff_round-1}_win']
+            
+        p1_cond = pp1- self.data.loc[team1, f'rd{playoff_round}_win']
+        p2_cond = pp2- self.data.loc[team2, f'rd{playoff_round}_win']
+        return p1_cond, p2_cond
+    
+    
+    def calculate_expected_rewards(self, team1, team2, playoff_round):
+        team1_reward, team2_reward = self.calculate_rewards(
+            team1, team2, playoff_round
+        )
+        p1,p2 = self.calculate_win_probability(
+            team1, team2, playoff_round
+        )
+        return (
+            self.discount * (self.total_reward + team1_reward) * p2, # team 2 losing
+            self.discount * (self.total_reward + team2_reward) * p1 # team 1 losiing
+        )
     
     def step(self, action):
         """
@@ -233,19 +252,25 @@ class MarchMadnessEnvironment():
             curr_bracket.team2.winner, 
             curr_bracket.playoff_round
         )
-        
-        team1_reward_exp = p1 * team1_reward
-        team2_reward_exp = p2 * team2_reward
+        team1_reward_exp, team2_reward_exp = self.calculate_expected_rewards(
+            curr_bracket.team1.winner, 
+            curr_bracket.team2.winner, 
+            curr_bracket.playoff_round
+        )
         
         # update the winner of bracket and state base on action 
-        if action == 1:
+        if action == 1: # p1 wins 
             curr_bracket.winner = curr_bracket.team1.winner
             self.state[curr_bracket.team2.winner] = 0
-            reward = team1_reward_exp
+            self.total_reward += team1_reward
+            self.discount *= p2
         else: 
             curr_bracket.winner = curr_bracket.team2.winner
             self.state[curr_bracket.team1.winner] = 0
-            reward = team2_reward_exp
+            self.total_reward += team2_reward
+            self.discount *= p1
+            
+        reward = self.total_reward * self.discount
 
         # update with the next win_probability
         if self.matchup_list:
@@ -259,12 +284,12 @@ class MarchMadnessEnvironment():
         done = len(self.matchup_list) == 0
         info = {
             'round': curr_bracket.playoff_round,
-            'matchup': {
-                curr_bracket.team1.winner: round(team1_reward_exp,3), 
-                curr_bracket.team2.winner: round(team2_reward_exp,3)
-            },
+            'team1': curr_bracket.team1.winner,
+            'team2': curr_bracket.team2.winner,
             'winner': curr_bracket.winner,
             'matchups_left': len(self.matchup_list),
+            'team1_exp_reward': team1_reward_exp, 
+            'team2_exp_reward': team2_reward_exp,
         } 
         return self.state_list, reward, done, info
     
@@ -286,15 +311,16 @@ def greedy_strategy(march_madness_event, verbose=True):
 
         team1 = curr_bracket.team1.winner
         team2 = curr_bracket.team2.winner
-
         playoff_round = curr_bracket.playoff_round
+        
 
         reward1, reward2 = march_madness_event.calculate_expected_rewards(team1, team2, playoff_round)
         action = 1*(reward1 > reward2)
         state, reward, done, info = march_madness_event.step(action)
         if verbose:
             print(info)
-        total_reward += reward
+        if done:
+            total_reward = reward
     return total_reward
 
 
@@ -312,18 +338,17 @@ def brute_force_strategy(march_madness_event):
             new_action_lists += [action_list + [1], action_list + [0]] 
         action_lists = new_action_lists 
     print(f"there are {n} possible set of actions")
-    assert n < 100000, 'there are too many combinations to compute
+    assert n < 100000, 'there are too many combinations to compute'
         
-    
     best_reward = 0 
     for action_list in action_lists:
         env.reset()
-        total_reward = 0 
+        actual_reward = 0 
         for action in action_list:
             state, reward, done, info = env.step(action)
-            total_reward += reward
-        if total_reward > best_reward:
-            best_reward = total_reward
+            if done:
+                actual_reward = reward
+        best_reward = max(actual_reward, best_reward)
     return best_reward
         
             
