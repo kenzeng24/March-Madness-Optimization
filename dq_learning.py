@@ -72,17 +72,16 @@ def train_model(
             
             observation = next_observation  # Update the observation
             
-            points += reward
 
             # Train the model by replaying
             #print(f"*** Debug: Done = {done}")
             replay(replay_buffer, 32, model, target_model)
 
         epsilon *= EPSILON_REDUCE  # Reduce epsilon
+        points = reward
         
         # Check if we need to update the target model
         update_model_handler(epoch, update_target_model, model, target_model)
-        
         if points > best_so_far:
             best_so_far = points
         if epoch %25 == 0:
