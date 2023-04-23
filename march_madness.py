@@ -52,17 +52,17 @@ class Bracket:
         
 class MarchMadnessEnvironment():
     
-    def __init__(self, data=None):
+    def __init__(self, filename=None):
         self.matchup_list = [] 
-        self.data = data
         
-        if self.data is None:
-            # defaults to 2023 
-            df_538 = pd.read_csv('data/fivethirtyeight_ncaa_forecasts.csv')
-            self.data = df_538[
-                (df_538.forecast_date=='2023-03-12') & 
-                (df_538.gender=='mens')
-            ].set_index(['team_region', 'team_seed'])
+        if filename is None:
+            filename='data/fivethirtyeight_ncaa_forecasts.csv'
+        # defaults to 2023 
+        df_538 = pd.read_csv(filename)
+        self.data = df_538[
+            (df_538.forecast_date=='2023-03-12') & 
+            (df_538.gender=='mens')
+        ].set_index(['team_region', 'team_seed'])
         
         self.teams, self.teams_map = make_teams(self.data)
         self.teams_list = list(self.teams_map.keys())
@@ -291,6 +291,7 @@ class MarchMadnessEnvironment():
             'team1_exp_reward': team1_reward_exp, 
             'team2_exp_reward': team2_reward_exp,
         } 
+        reward = reward if done else 0 
         return self.state_list, reward, done, info
     
     def close(self):
@@ -300,68 +301,3 @@ class MarchMadnessEnvironment():
         pass 
     
 
-def greedy_strategy(march_madness_event, verbose=True):
-    """
-    always pick the action that leads to best immediate reward
-    """
-    total_reward = 0 
-    done = False 
-    while not done:
-        curr_bracket = march_madness_event.matchup_list[0]
-
-        team1 = curr_bracket.team1.winner
-        team2 = curr_bracket.team2.winner
-        playoff_round = curr_bracket.playoff_round
-        
-
-        reward1, reward2 = march_madness_event.calculate_expected_rewards(team1, team2, playoff_round)
-        action = 1*(reward1 > reward2)
-        state, reward, done, info = march_madness_event.step(action)
-        if verbose:
-            print(info)
-        if done:
-            total_reward = reward
-    return total_reward
-
-
-def brute_force_strategy(march_madness_event):
-    """
-    iterate through all available sequences of actions 
-    """
-    env = MarchMadnessEnvironment()
-    n = len(env.matchup_list)
-    
-    action_lists = [[]]
-    for i in range(n):
-        new_action_lists = [] 
-        for action_list in action_lists:
-            new_action_lists += [action_list + [1], action_list + [0]] 
-        action_lists = new_action_lists 
-    print(f"there are {n} possible set of actions")
-    assert n < 100000, 'there are too many combinations to compute'
-        
-    best_reward = 0 
-    for action_list in action_lists:
-        env.reset()
-        actual_reward = 0 
-        for action in action_list:
-            state, reward, done, info = env.step(action)
-            if done:
-                actual_reward = reward
-        best_reward = max(actual_reward, best_reward)
-    return best_reward
-        
-            
-if __name__ == "__main__":
-    
-    env = MarchMadnessEnvironment()
-    for x in env.matchup_list:
-        print(x)
-    print(env.matchup_in_round)
-    
-    greedy_score = greedy_strategy(env)
-    print(f'greedy reward: {greedy_score}') 
-    
-    #optimal_score =  brute_force_strategy(env)
-    # print(f'optimal reward: {optimal_score}')
-    
