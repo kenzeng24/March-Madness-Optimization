@@ -1,5 +1,6 @@
 # import gym
 import pandas as pd 
+from gym.spaces import Discrete, Box
 
 
 def make_teams(data):
@@ -66,6 +67,8 @@ class MarchMadnessEnvironment():
         
         self.teams, self.teams_map = make_teams(self.data)
         self.teams_list = list(self.teams_map.keys())
+        self.action_space=Discrete(2)
+        self.observation_space = Box(low=0, high=1, shape=(len(self.teams_list),))
         self.reset()
     
     def reset(self):
