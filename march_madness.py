@@ -1,5 +1,6 @@
 # import gym
 import pandas as pd 
+import numpy as np
 from gym.spaces import Discrete, Box
 
 
@@ -295,7 +296,7 @@ class MarchMadnessEnvironment():
             'team2_exp_reward': team2_reward_exp,
         } 
         reward = reward if done else 0 
-        return self.state_list, reward, done, info
+        return np.array(self.state_list), reward, done, info
     
     def close(self):
         pass 
