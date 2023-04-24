@@ -233,7 +233,8 @@ def exploit_model(model, env=None):
         # clear_output(wait=True)
         if done:
             total_reward = reward
-            print(f"Total Reward: {total_reward}")
+            print(f"Expcted Reward: {total_reward}")
+            print(f"Total Reward: {env.total_reward}")
             env.reset()
             
     env.close()

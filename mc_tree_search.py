@@ -5,6 +5,9 @@ from march_madness import MarchMadnessEnvironment
 
 
 class MarchMadnessState(BaseState):
+    """
+    Represents the current state of a March Madness game.
+    """
     def __init__(self, env=None, reward=0, done=False):
         if env is not None:
             self.env = env
