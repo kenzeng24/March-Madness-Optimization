@@ -14,6 +14,15 @@ from march_madness import MarchMadnessEnvironment
 GAMMA = 0.95
 
 def build_model(n_teams=68, n_actions=2):
+    """
+    Build a deep neural network (DNN) model for predicting the outcome of March Madness games.
+
+    Parameters:
+        n_teams (int): The number of teams in the tournament. Default is 68.
+        n_actions (int): The number of actions the agent can take. Default is 2 (i.e., win or lose).
+    Returns:
+        model (keras.Model): The DNN model for predicting the outcome of March Madness games.
+    """
     model = Sequential()
     model.add(Dense(256, input_shape=(1, n_teams)))
     model.add(Activation('relu'))
@@ -25,14 +34,31 @@ def build_model(n_teams=68, n_actions=2):
    
     return model
 
+
 def train_model(
+    env=None,
+    model=None,
     EPOCHS = 300,
     epsilon = 1.0,
     EPSILON_REDUCE = 0.995,
     LEARNING_RATE = 0.001, 
-    model=None
 ):
-    env = MarchMadnessEnvironment()
+    """
+    Train a Deep Q-Network (DQN) model using the given environment and hyperparameters.
+
+    Parameters:
+        env (gym.Env): The OpenAI Gym environment to use for training.
+        model (keras.Model): The DQN model to train.
+        EPOCHS (int): The number of epochs to train for. Default is 300.
+        epsilon (float): The initial value of epsilon for the epsilon-greedy policy. Default is 1.0.
+        EPSILON_REDUCE (float): The factor by which to reduce epsilon at the end of each epoch. Default is 0.995.
+        LEARNING_RATE (float): The learning rate for the optimizer. Default is 0.001.
+
+    Returns:
+        model (keras.Model): The trained DQN model.
+    """
+    if not env:
+        env = MarchMadnessEnvironment()
     n_actions = 2
     n_teams = len(env.teams_list)
     if model is None:
@@ -90,6 +116,7 @@ def train_model(
     return model
 
 def epsilon_greedy_action_selection(model, epsilon, observation):
+
     obs=[]
     if np.random.random() > epsilon:
         #print(f"*** Taking Greedy Action, observation shape 1: {observation.shape}")
@@ -139,6 +166,7 @@ def update_model(replay_buffer, batch_size, model, target_model, gamma):
     # Train the main model using the updated Q-values
     model.fit(states, q_values, epochs=1, verbose=0)
 
+
 def replay(replay_buffer, batch_size, model, target_model):
     
     # As long as the buffer has not enough elements we do nothing
@@ -156,9 +184,6 @@ def replay(replay_buffer, batch_size, model, target_model):
     states, actions, rewards, new_states, dones = zipped_samples  
     
     # Predict targets for all states from the sample
-    #print(f"*** *** *** *** EXPERIENCE REPLAY, length states: {len(states)}")
-    #print(f"*** *** *** *** EXPERIENCE REPLAY, states: {np.array(states).shape}")
-    #print(f"*** *** *** *** EXPERIENCE REPLAY, states: {np.array(states[0]).shape}")
     targets = target_model.predict(np.array(states))
     
     # Predict Q-Values for all new states from the sample
@@ -187,8 +212,9 @@ def update_model_handler(epoch, update_target_model, model, target_model):
         #print(f"*** Debug: Updating model")
 
 
-def exploit_model(model):
-    env = MarchMadnessEnvironment()
+def exploit_model(model, env=None):
+    if env is None:
+        env = MarchMadnessEnvironment()
     observation, info = env.reset()
     total_reward = 0 
     done = False

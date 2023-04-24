@@ -2,10 +2,12 @@
 # works on google colab 
 
 import numpy as np
-
 import gym
 from gym.wrappers import RecordVideo
-
+import sonnet as snt
+import tensorflow as tf
+import tensorflow_probability as tfp
+import logging
 import dm_env
 import acme
 from acme import wrappers
@@ -15,21 +17,15 @@ from acme.tf import utils as tf2_utils
 from acme.agents.tf import dqn
 from acme.utils import loggers
 
-import sonnet as snt
-
-import tensorflow as tf
-import tensorflow_probability as tfp
-
-import logging
 logging.getLogger().setLevel(logging.DEBUG)  # help with seeing ACME logs
 
 from march_madness import MarchMadnessEnvironment
 
 def train_model():
+
     environment = MarchMadnessEnvironment(
         filename='data/fivethirtyeight_ncaa_forecasts.csv'
     )
-
     environment = wrappers.GymWrapper(environment)
     environment = wrappers.SinglePrecisionWrapper(environment)
 

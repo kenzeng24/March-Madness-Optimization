@@ -6,7 +6,14 @@ from gym.spaces import Discrete, Box
 
 def make_teams(data):
     """
-    create a team dictionary from data 
+    Create a team dictionary from the provided data.
+
+    Args:
+        data (pandas DataFrame): The data containing the team and its region, seed, and winning probability.
+
+    Returns:
+        teams (dict): A dictionary containing each team in each region and its corresponding seed.
+        teams_map (dict):A dictionary containing each team and its corresponding region and seed.
     """
     teams = {}
     teams_map = {}
@@ -28,12 +35,24 @@ def make_teams(data):
     
 
 def example_reward_function(seed, playoff_round):
+    """
+    An example reward function that calculates the reward for a given seed and playoff round.
+
+    Args:
+        seed : str, The seed of a team.
+        playoff_round : int, The playoff round of the game.
+
+    Returns:
+        The reward for the team with the given seed in the given playoff round.
+    """
     modifier = playoff_round-1 if playoff_round != 7 else 10 
     return int(seed.replace('a','').replace('b','')) * modifier
 
 
 class Bracket:
-    
+    """
+    A class to represent a game bracket in the tournament.
+    """
     def __init__(self, winner=None, team1=None, team2=None,playoff_round=None):
         self.winner = winner
         self.playoff_round = playoff_round
@@ -55,6 +74,14 @@ class Bracket:
 class MarchMadnessEnvironment():
     
     def __init__(self, filename=None):
+        """
+        Initialize the March Madness environment.
+
+        Parameters:
+        -----------
+        filename : str, default None
+            The filename of the data containing the team and its region, seed, and winning probability.
+        """
         self.matchup_list = [] 
         
         if filename is None:
@@ -74,7 +101,7 @@ class MarchMadnessEnvironment():
     
     def reset(self):
         """
-        regenerate brackets and refresh all winners
+        Reset the environment and regenerate the brackets.
         """
         self.bracket_probability = 1
         self.matchup_list = []
@@ -297,6 +324,10 @@ class MarchMadnessEnvironment():
         } 
         reward = reward if done else 0 
         return np.array(self.state_list), reward, done, info
+    
+    def get_current_matchup(self):
+        curr_bracket = self.matchup_list[0]
+        return curr_bracket.team1.winner, curr_bracket.team2.winner
     
     def close(self):
         pass 
